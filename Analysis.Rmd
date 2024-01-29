@@ -1,0 +1,371 @@
+---
+title: "IRD Analysis"
+author: "Maliha"
+date: "2023-09-12"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(broom)
+library(car)
+library(gtsummary)
+library(lubridate)
+library(readxl)
+library(stringr)
+
+
+```
+
+```{r}
+screendata <- read.csv("Datasets/PSZ Impact Screening Data.csv", na.strings = "")
+sessiondata <- read.csv("Datasets/PSZ Impact Session Data.csv", na.strings = "")
+
+```
+#Insert tables
+```{r}
+
+```
+
+```{r}
+# Change the format of the date variables to keep the earlier screening date
+# Arranged the variables in desirable order
+# Removed the duplicates in screendata
+
+screendata <- screendata %>% 
+  mutate(DATE_ENTERED_SCREENING = as_date(DATE_ENTERED_SCREENING, format = '%m/%d/%y')) %>% 
+  arrange(PATIENT_ID, DATE_ENTERED_SCREENING) %>% 
+  distinct(DATE_ENTERED, USER_ID, PATIENT_ID, loc_facility, GENDER, .keep_all = TRUE)
+
+# Merged session data and screen data
+
+df <- left_join(sessiondata, screendata) 
+
+```
+
+
+```{r}
+# Rename variables and Reassign data frame with selected variables
+
+df <- df %>% 
+  select(ID = PATIENT_ID, AGE, GENDER, Marital_status = PART_MARI,
+         EDUCATION, loss_of_pleasure, worry, difficulty_in_controlling_worry,
+         feeling_depressed, PHQ4_score, FIRST_TOTAL_SCORE_PHQ, LAST_TOTAL_SCORE_PHQ,
+         starts_with('DATE_FOLLOWUP_'), Status = TermSt)  
+
+# Make variables all lower case for consistency
+         
+colnames(df) <- str_to_lower(colnames(df))
+
+```
+
+```{r}
+df$status <- factor(df$status, 
+                    levels = c('Completed therapy',
+                               'Loss to Follow-up',
+                               'Refused therapy',
+                               'Referred',
+                               'Other.'), 
+                    ordered = TRUE)
+
+df <- df %>% mutate(edu_cat = case_match(education, 
+                        c('Primary (Class 1-5)', 'Secondary (Class 6-8)') ~ 'Primary',
+                        'Matric (9-10)' ~ 'Matric',
+                        'Intermediate (11-12)' ~ 'Intermediate',
+                        'Bachelors' ~ 'Bachelors',
+                        'Masters' ~ 'Masters', 
+                        'Kuch nahi' ~ 'No Education',
+                        'Islamic education' ~ 'Islamic Education'))
+
+df$edu_cat <- factor(df$edu_cat,
+                     levels = c('Islamic Education',
+                                'No Education',
+                                'Primary',
+                                'Matric',
+                                'Intermediate',
+                                'Bachelors',
+                                'Masters'),
+                     ordered = TRUE)
+                                
+                        
+table(df$edu_cat)       
+
+```
+```{r}
+#Combine Marital Status Divorced and Separated 
+table(df$marital_status)
+df <- df %>% mutate(mari_cat = case_match(marital_status, 
+                                          c('Divorced','Separated') ~ 'Divorced/Separated',
+                                          'Married' ~ 'Married',
+                                          'Single' ~ 'Single',
+                                          'Widowed' ~ 'Widowed'))
+
+df$mari_cat <- factor(df$mari_cat,
+                     levels = c('Single',
+                                'Married',
+                                'Divorced/Separated',
+                                'Widowed'),
+                     ordered = TRUE)
+
+table(df$mari_cat)
+
+```
+
+
+```{r}
+##table1 <- CreateTableOne(data=df, factorVars = c('gender', 'marital_status', 'edu_cat'), vars = c('gender', 'marital_status', 'edu_cat', 'age'))
+##kableone(table1)
+#table1(~factor(gender) + age + factor(marital_status), data=df)
+
+df |> select(age, gender, edu_cat, mari_cat, status) %>% 
+  tbl_summary() %>% 
+  as_gt()
+
+df |> 
+  select(age, gender, edu_cat, mari_cat, status) |> 
+  tbl_summary(
+    label = c(age = "Age",
+              gender = "Gender",
+              edu_cat = "Education",
+              mari_cat = "Marital Status",
+              status = "Therapy Status")) 
+
+#how should I deal with the unknowns? leave them as it is?
+# df |> 
+#   select(age, gender, edu_cat, marital_status, diagnosis, status) |> 
+#   tbl_summary(
+#     by = diagnosis,
+#     label = c(age = "Age",
+#               gender = "Gender",
+#               edu_cat = "Education",
+#               marital_status = "Marital Status",
+#               status = "Therapy Status")) |> 
+#   add_overall(last = TRUE) |> 
+#   add_p()
+
+
+
+
+```
+
+
+
+```{r}
+table(df$status, useNA = 'always')
+table(df$marital_status, useNA = 'always')
+table(df$education, useNA = 'always')
+
+df %>% ggplot() +
+  geom_bar(aes(x = mari_cat))
+
+statusplot <- df %>% ggplot() +
+  geom_bar(aes(x = status))
+statusplot
+ggsave('Plots/statusplot.pdf', statusplot, height = 5, width = 7)
+
+```
+```{r}
+df %>% ggplot() +
+  geom_bar(aes(x = gender, fill = status))
+
+df %>% ggplot(aes(x = status, group = gender)) +
+  geom_bar(aes(y = ..prop.., fill = factor(..x..)), stat = 'count') +
+  facet_grid(~gender) +
+  theme(legend.position = 'none') + 
+  labs(y = 'Proportion', x = 'Therapy Status', title = 'Distribution of Gender by Status') +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+#ggsave('Plots/statusplot.pdf', statusplot, height = 5, width = 7)
+
+df %>% ggplot() +
+  geom_bar(aes(x = gender, fill = status), 
+           position = 'fill') + 
+  labs(y = 'Proportion', title = 'Distribution of Gender by Status') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_brewer(palette = 'RdPu') 
+```
+
+```{r}
+df <- df %>%
+  mutate(diagnosis = case_when(phq4_score <= 6 ~ 'asymtomptic',
+                               phq4_score > 6 ~ 'symtomptic'))
+
+diagnosis_table <- table(df$gender, df$diagnosis)
+
+
+chisq.test(diagnosis_table)
+
+#linear regression
+depression_model <- lm(phq4_score ~ gender, data = df)
+summary(depression_model)
+
+#the mean depression for female is ---- and male is ---, conf.level was around the difference 
+```
+
+```{r}
+#create a new variable the computes complete therapy as nominal variable
+df <- df %>% 
+  rowwise() %>%
+  mutate(completed_therapy = sum(!is.na(date_followup_1), 
+                                 !is.na(date_followup_2),
+                                 !is.na(date_followup_3),
+                                 !is.na(date_followup_4))) #>=3)
+
+table(df$completed_therapy, df$status)
+
+```
+Using the criteria that 3 sessions or more is completed therapy, we have three that fall under loss to follow up even though they had 4 appointments.
+At the moment going to lump those into completed therapy group. 
+
+```{r}
+#logistic regresion 
+##age_model <- glm(status ~ age, data = df, family = 'binomial')
+##summary(age_model)
+
+#create a new variable that computes complete therapy
+df <- df %>% 
+  rowwise() %>%
+  mutate(completed_therapy = sum(!is.na(date_followup_1), 
+                                 !is.na(date_followup_2),
+                                 !is.na(date_followup_3),
+                                 !is.na(date_followup_4))>=3) %>%
+  mutate(lost_to_followup = !completed_therapy) %>%
+  mutate(completed_therapy = factor(completed_therapy, 
+                                    levels = c(TRUE, FALSE), 
+                                    labels = c('Completed', 'Not Completed'))) %>%
+  mutate(lost_to_followup = factor(lost_to_followup, 
+                                   levels = c(TRUE, FALSE),
+                                   labels = c('Lost', 'Not Lost')))
+
+table(df$completed_therapy, df$status)
+
+#table1(~factor(gender) + age + factor(marital_status) | completed_therapy, data=df)
+#table1(~factor(gender) + age + factor(marital_status) | lost_to_followup, data=df)
+
+```
+```{r}
+table(df$marital_status, df$completed_therapy)
+table(df$completed_therapy)
+
+```
+
+
+```{r}
+#logistic regression using education as a predictor
+table(df$completed_therapy)
+
+edu_table <- table(df$edu_cat, df$completed_therapy)
+chisq.test(edu_table)
+```
+```{r}
+#logistic regression using age and marital status as predictors
+age_mar_model <- glm(completed_therapy ~ age + marital_status, data = df, family = 'binomial')
+summary(age_mar_model)
+
+df <- df %>% 
+  mutate(completed_therapy_logical = completed_therapy == "Completed")
+
+age_mar_model <- glm(completed_therapy_logical ~ age + marital_status, data = df, family = 'binomial')
+age_mar_model_tbl <- age_mar_model %>% 
+    tbl_regression(
+    #label = var_labels,
+    exponentiate = TRUE
+  ) |> 
+  add_global_p(keep = TRUE)
+
+age_mar_model_tbl
+# What should we do about the Islamic Education piece in Education variable?
+# Should I go back to the dataset and try to fix the errors?
+
+```
+
+```{r}
+gender_model <- glm(completed_therapy ~ gender, data = df, family = 'binomial')
+summary(gender_model)
+
+gender_table <- table(df$gender, df$completed_therapy)
+
+
+chisq.test(gender_table)
+
+```
+
+```{r}
+#univariable analysis
+m_education <- glm(completed_therapy ~ edu_cat, family = binomial, data = df)
+summary(m_education)
+tidy(m_education, exponentiate = TRUE, conf.int = TRUE)
+Anova(m_education)
+
+
+m_marcat <- glm(completed_therapy ~ mari_cat, family = binomial, data = df)
+summary(m_marcat)
+tidy(m_marcat, exponentiate = TRUE, conf.int = TRUE)
+Anova(m_maritalstatus)
+
+m_gender <- glm(completed_therapy ~ gender, family = binomial, data = df)
+summary(m_gender)
+tidy(m_gender, exponentiate = TRUE, conf.int = TRUE)
+Anova(m_gender)
+
+m_age <- glm(completed_therapy ~ age, family = binomial, data = df)
+summary(m_age)
+tidy(m_age, exponentiate = TRUE, conf.int = TRUE)
+Anova(m_age)
+
+```
+```{r}
+#multivariable analysis
+#completed_therapy, age, gender, marital status and education
+
+mv1 <- glm(completed_therapy ~ age + gender + edu_cat + mari_cat,
+           family = binomial,
+           data = df)
+
+# Extract estimates
+tidy(mv1, exponentiate = TRUE, conf.int = TRUE)
+# Obtain global p value
+Anova(mv1)
+
+# Create publication-ready table 
+# Create a named vector for labels
+var_labels <-  c(
+  age = "Age in Years",
+  gender = "Gender",
+  edu_cat = "Highest Education Level",
+  mari_cat = "Marital Status",
+  phq4_score = "Diagnosis at Mental Health Assessment",
+  completed_therapy = "Therapy Status of the Patient"
+)
+
+mv <- mv1 |> 
+  tbl_regression(
+    label = var_labels,
+    exponentiate = TRUE
+  ) |> 
+  add_global_p()
+
+mv
+```
+
+
+
+```{r}
+
+```
+
+Use the code from the IRD workshop to create tables which means I don't need to apply the log_OR and log CI codes since they are included in that but it is helpful to know how that works. 
+
+Create a binomial variable for completed therapy
+
