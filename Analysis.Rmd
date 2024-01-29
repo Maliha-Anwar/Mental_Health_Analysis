@@ -198,8 +198,8 @@ df %>% ggplot() +
 
 ```{r}
 df <- df %>%
-  mutate(diagnosis = case_when(phq4_score <= 6 ~ 'asymtomptic',
-                               phq4_score > 6 ~ 'symtomptic'))
+  mutate(diagnosis = case_when(phq4_score <= 6 ~ 'Asymtomptic',
+                               phq4_score > 6 ~ 'Symtomptic'))
 
 diagnosis_table <- table(df$gender, df$diagnosis)
 
@@ -291,45 +291,47 @@ age_mar_model_tbl
 ```
 
 ```{r}
-gender_model <- glm(completed_therapy ~ gender, data = df, family = 'binomial')
-summary(gender_model)
-
-gender_table <- table(df$gender, df$completed_therapy)
-
-
-chisq.test(gender_table)
-
-```
-
-```{r}
 #univariable analysis
-m_education <- glm(completed_therapy ~ edu_cat, family = binomial, data = df)
+#education
+m_education <- glm(completed_therapy ~ edu_cat, family = "binomial", data = df)
 summary(m_education)
 tidy(m_education, exponentiate = TRUE, conf.int = TRUE)
 Anova(m_education)
 
-
+#marital status
 m_marcat <- glm(completed_therapy ~ mari_cat, family = binomial, data = df)
 summary(m_marcat)
 tidy(m_marcat, exponentiate = TRUE, conf.int = TRUE)
 Anova(m_maritalstatus)
 
+#gender
 m_gender <- glm(completed_therapy ~ gender, family = binomial, data = df)
 summary(m_gender)
 tidy(m_gender, exponentiate = TRUE, conf.int = TRUE)
 Anova(m_gender)
 
+#age
 m_age <- glm(completed_therapy ~ age, family = binomial, data = df)
 summary(m_age)
 tidy(m_age, exponentiate = TRUE, conf.int = TRUE)
 Anova(m_age)
 
+#diagnosis 
+m_diagnosis <- glm(completed_therapy ~ diagnosis, family = binomial, data = df)
+summary(m_diagnosis)
+tidy(m_diagnosis, exponentiate = TRUE, conf.int = TRUE)
+Anova(m_diagnosis)
+
 ```
 ```{r}
+
+#Convert edu_cart back to character
+df$edu_nf <-as.character(df$edu_cat)
+df$mar_nf <- as.character(df$mari_cat)
 #multivariable analysis
 #completed_therapy, age, gender, marital status and education
 
-mv1 <- glm(completed_therapy ~ age + gender + edu_cat + mari_cat,
+mv1 <- glm(completed_therapy ~ age + gender + diagnosis + edu_nf + mar_nf,
            family = binomial,
            data = df)
 
@@ -343,9 +345,9 @@ Anova(mv1)
 var_labels <-  c(
   age = "Age in Years",
   gender = "Gender",
-  edu_cat = "Highest Education Level",
-  mari_cat = "Marital Status",
-  phq4_score = "Diagnosis at Mental Health Assessment",
+  diagnosis = "Patient Diagnosis after Initial Mental Health Assessment",
+  edu_nf = "Highest Education Level",
+  mar_nf = "Marital Status",
   completed_therapy = "Therapy Status of the Patient"
 )
 
@@ -357,6 +359,7 @@ mv <- mv1 |>
   add_global_p()
 
 mv
+
 ```
 
 
