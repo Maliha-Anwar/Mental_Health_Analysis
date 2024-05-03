@@ -154,12 +154,6 @@ df |>
 #   add_p()
 
 
-
-
-```
-
-
-
 ```{r}
 table(df$status, useNA = 'always')
 table(df$marital_status, useNA = 'always')
@@ -360,15 +354,4 @@ mv <- mv1 |>
 
 mv
 
-```
-
-
-
-```{r}
-
-```
-
-Use the code from the IRD workshop to create tables which means I don't need to apply the log_OR and log CI codes since they are included in that but it is helpful to know how that works. 
-
-Create a binomial variable for completed therapy
 
